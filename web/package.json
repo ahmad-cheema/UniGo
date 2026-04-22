@@ -8,6 +8,7 @@
   "scripts": {
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
+    "db:seed:criteria": "tsx prisma/seed-criteria.ts",
     "db:studio": "prisma studio",
     "dev": "next dev",
     "build": "next build",
@@ -21,7 +22,8 @@
     "next": "16.2.4",
     "pg": "^8.20.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
