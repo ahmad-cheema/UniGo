@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: unigo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: unigo
+      POSTGRES_PASSWORD: unigo123
+      POSTGRES_DB: unigo
+    ports:
+      - "5433:5432"
+    volumes:
+      - unigo_pgdata:/var/lib/postgresql/data
+
+volumes:
+  unigo_pgdata:
