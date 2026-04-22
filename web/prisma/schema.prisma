@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model University {
+  id                   Int       @id @default(autoincrement())
+  name                 String    @unique
+  location             String
+  province             String
+  established          Int?
+  type                 String?
+  campuses             String?
+  specialization       String?
+  specializationDetail String?
+  programsOfferedRaw   String?
+  acceptanceRate       Float?
+  annualFeePKR         Int?
+  studentFacultyRatio  String?
+  rankingPakistan      Int?
+  hecRecognized        Boolean   @default(true)
+  applicationDeadline  String?
+  entryTestRequired    String?
+  hostelAvailable      Boolean?
+  scholarshipAvailable Boolean?
+  website              String?
+  programs             Program[]
+  matches              EligibilityMatchResult[]
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([province])
+  @@index([entryTestRequired])
+  @@index([rankingPakistan])
+}
+
+model Program {
+  id                  Int                  @id @default(autoincrement())
+  universityId        Int
+  name                String
+  university          University           @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  eligibilityCriteria EligibilityCriterion[]
+  matches             EligibilityMatchResult[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([name])
+  @@index([universityId])
+  @@unique([universityId, name])
+}
+
+model EligibilityCriterion {
+  id                Int      @id @default(autoincrement())
+  programId         Int
+  minInterPercentage Float?
+  minEntryTestScore Float?
+  acceptedEntryTests String[]
+  isActive          Boolean  @default(true)
+  program           Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([programId])
+}
+
+model StudentProfile {
+  id               Int                    @id @default(autoincrement())
+  fullName         String
+  email            String                 @unique
+  province         String?
+  interests        String[]
+  matricPercentage Float?
+  interPercentage  Float?
+  testScores       TestScore[]
+  matches          EligibilityMatchResult[]
+  studyPlans       StudyPlan[]
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+}
+
+model TestScore {
+  id         Int            @id @default(autoincrement())
+  studentId  Int
+  testType   String
+  score      Float
+  maxScore   Float?
+  examDate   DateTime?
+  student    StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([studentId, testType])
+}
+
+model EligibilityMatchResult {
+  id           Int            @id @default(autoincrement())
+  studentId    Int
+  universityId Int
+  programId    Int?
+  isEligible   Boolean
+  reasonCodes  String[]
+  student      StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  university   University     @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  program      Program?       @relation(fields: [programId], references: [id], onDelete: SetNull)
+  evaluatedAt  DateTime       @default(now())
+
+  @@index([studentId])
+  @@index([universityId])
+  @@index([programId])
+}
+
+model StudyPlan {
+  id            Int            @id @default(autoincrement())
+  studentId     Int
+  modelName     String
+  promptVersion String
+  planJson      Json
+  generatedAt   DateTime       @default(now())
+  student       StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+}
