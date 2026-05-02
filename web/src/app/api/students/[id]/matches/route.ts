@@ -21,7 +21,7 @@ export async function GET(
       ...(eligibleOnly ? { isEligible: true } : {})
     },
     take: limit,
-    orderBy: [{ isEligible: "desc" }, { evaluatedAt: "desc" }],
+    orderBy: [{ matchScore: "desc" }, { isEligible: "desc" }],
     include: {
       university: {
         select: {

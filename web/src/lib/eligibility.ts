@@ -13,6 +13,7 @@ type EvalOutcome = {
   universityId: number;
   programId: number;
   isEligible: boolean;
+  matchScore: number;
   reasonCodes: string[];
 };
 
@@ -78,6 +79,63 @@ function evaluateAgainstCriterion(
   return { ok: reasons.length === 0, reasons };
 }
 
+/* ── Match Score Calculation ──────────────────────── */
+
+function computeMatchScore(
+  interPercentage: number | null | undefined,
+  criterion: {
+    minInterPercentage: number | null;
+    minEntryTestScore: number | null;
+    acceptedEntryTests: string[];
+  },
+  studentScores: Array<{ testType: string; score: number; maxScore: number | null }>,
+  university: {
+    province: string;
+    scholarshipAvailable: boolean | null;
+    hostelAvailable: boolean | null;
+    hecRecognized: boolean;
+  },
+  studentProvince: string | null
+): number {
+  let score = 0;
+
+  // ── Academic fit: Inter percentage (0–35 points) ──
+  const minInter = criterion.minInterPercentage ?? 50;
+  const inter = interPercentage ?? 0;
+  if (inter >= minInter) {
+    score += 25;
+    score += Math.min(10, Math.round((inter - minInter) / 3));
+  } else if (minInter > 0) {
+    score += Math.max(0, Math.round((inter / minInter) * 20));
+  }
+
+  // ── Academic fit: Entry test (0–35 points) ──
+  const minTest = criterion.minEntryTestScore ?? 0;
+  const accepted = criterion.acceptedEntryTests ?? [];
+  const bestTest = bestMatchingTestPercent(accepted, studentScores);
+
+  if (accepted.length === 0 || minTest === 0) {
+    score += 35; // no test requirement = full marks
+  } else if (bestTest !== null) {
+    if (bestTest >= minTest) {
+      score += 25;
+      score += Math.min(10, Math.round((bestTest - minTest) / 3));
+    } else if (minTest > 0) {
+      score += Math.max(0, Math.round((bestTest / minTest) * 20));
+    }
+  }
+  // if required test not found → 0 points
+
+  // ── University fit (0–30 points) ──
+  if (studentProvince && university.province === studentProvince) score += 10;
+  if (university.scholarshipAvailable) score += 8;
+  if (university.hostelAvailable) score += 6;
+  if (university.hecRecognized) score += 4;
+  score += 2; // baseline
+
+  return Math.min(100, Math.max(0, score));
+}
+
 export async function evaluateAndPersistEligibility(input: EvaluateInput) {
   const student = await prisma.studentProfile.findUnique({
     where: { id: input.studentId },
@@ -120,6 +178,13 @@ export async function evaluateAndPersistEligibility(input: EvaluateInput) {
         universityId: program.universityId,
         programId: program.id,
         isEligible: false,
+        matchScore: computeMatchScore(
+          student.interPercentage,
+          { minInterPercentage: null, minEntryTestScore: null, acceptedEntryTests: [] },
+          student.testScores,
+          program.university,
+          student.province
+        ),
         reasonCodes: ["NO_ACTIVE_CRITERIA"]
       });
       continue;
@@ -127,9 +192,22 @@ export async function evaluateAndPersistEligibility(input: EvaluateInput) {
 
     let passFound = false;
     let bestReasons: string[] = ["NOT_ELIGIBLE"];
+    let bestScore = 0;
 
     for (const c of criteria) {
       const result = evaluateAgainstCriterion(student.interPercentage, c, student.testScores);
+      const score = computeMatchScore(
+        student.interPercentage,
+        c,
+        student.testScores,
+        program.university,
+        student.province
+      );
+
+      if (score > bestScore) {
+        bestScore = score;
+      }
+
       if (result.ok) {
         passFound = true;
         bestReasons = [];
@@ -148,6 +226,7 @@ export async function evaluateAndPersistEligibility(input: EvaluateInput) {
       universityId: program.universityId,
       programId: program.id,
       isEligible: passFound,
+      matchScore: bestScore,
       reasonCodes: passFound ? ["ELIGIBLE"] : bestReasons
     });
   }
@@ -163,6 +242,7 @@ export async function evaluateAndPersistEligibility(input: EvaluateInput) {
         universityId: o.universityId,
         programId: o.programId,
         isEligible: o.isEligible,
+        matchScore: o.matchScore,
         reasonCodes: o.reasonCodes
       }))
     });

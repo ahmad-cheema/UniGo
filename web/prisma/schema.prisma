@@ -29,6 +29,7 @@ model University {
   website              String?
   programs             Program[]
   matches              EligibilityMatchResult[]
+  shortlistedBy        Shortlist[]
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
@@ -66,6 +67,16 @@ model EligibilityCriterion {
   @@index([programId])
 }
 
+model User {
+  id             Int             @id @default(autoincrement())
+  email          String          @unique
+  passwordHash   String
+  fullName       String
+  studentProfile StudentProfile?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
 model StudentProfile {
   id               Int                    @id @default(autoincrement())
   fullName         String
@@ -74,8 +85,11 @@ model StudentProfile {
   interests        String[]
   matricPercentage Float?
   interPercentage  Float?
+  userId           Int?                   @unique
+  user             User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
   testScores       TestScore[]
   matches          EligibilityMatchResult[]
+  shortlist        Shortlist[]
   studyPlans       StudyPlan[]
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
@@ -101,6 +115,7 @@ model EligibilityMatchResult {
   universityId Int
   programId    Int?
   isEligible   Boolean
+  matchScore   Float?
   reasonCodes  String[]
   student      StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
   university   University     @relation(fields: [universityId], references: [id], onDelete: Cascade)
@@ -110,6 +125,18 @@ model EligibilityMatchResult {
   @@index([studentId])
   @@index([universityId])
   @@index([programId])
+}
+
+model Shortlist {
+  id           Int            @id @default(autoincrement())
+  studentId    Int
+  universityId Int
+  student      StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  university   University     @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  addedAt      DateTime       @default(now())
+
+  @@unique([studentId, universityId])
+  @@index([studentId])
 }
 
 model StudyPlan {
