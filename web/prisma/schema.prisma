@@ -42,6 +42,7 @@ model Program {
   id                  Int                  @id @default(autoincrement())
   universityId        Int
   name                String
+  description         String?
   university          University           @relation(fields: [universityId], references: [id], onDelete: Cascade)
   eligibilityCriteria EligibilityCriterion[]
   matches             EligibilityMatchResult[]
@@ -56,9 +57,11 @@ model Program {
 model EligibilityCriterion {
   id                Int      @id @default(autoincrement())
   programId         Int
+  minMatricPercentage Float?
   minInterPercentage Float?
   minEntryTestScore Float?
   acceptedEntryTests String[]
+  requiredSubjects  String[]
   isActive          Boolean  @default(true)
   program           Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
   createdAt         DateTime @default(now())
@@ -87,6 +90,8 @@ model StudentProfile {
   interPercentage  Float?
   userId           Int?                   @unique
   user             User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  academicRecords  AcademicRecord[]
+  academicDocuments AcademicDocument[]
   testScores       TestScore[]
   matches          EligibilityMatchResult[]
   shortlist        Shortlist[]
@@ -107,6 +112,40 @@ model TestScore {
   updatedAt  DateTime       @updatedAt
 
   @@index([studentId, testType])
+}
+
+model AcademicRecord {
+  id             Int            @id @default(autoincrement())
+  studentId      Int
+  level          String
+  subject        String
+  marksObtained  Float?
+  totalMarks     Float?
+  grade          String?
+  percentage     Float?
+  examBoard      String?
+  examYear       Int?
+  student        StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([studentId])
+  @@index([level, subject])
+}
+
+model AcademicDocument {
+  id           Int            @id @default(autoincrement())
+  studentId    Int
+  title        String
+  level        String?
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  data         Bytes
+  student      StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  uploadedAt   DateTime       @default(now())
+
+  @@index([studentId])
 }
 
 model EligibilityMatchResult {

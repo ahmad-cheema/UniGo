@@ -61,6 +61,20 @@ function defaultMinEntryScore(acceptedTests: string[]): number {
   return maxScore;
 }
 
+function inferRequiredSubjects(programName: string): string[] {
+  const name = programName.toLowerCase();
+  if (name.includes("mbbs") || name.includes("medicine") || name.includes("pharmacy")) {
+    return ["Biology", "Chemistry"];
+  }
+  if (name.includes("engineering") || name.includes("computer") || name.includes("software") || name.includes("data") || name.includes("ai")) {
+    return ["Mathematics"];
+  }
+  if (name.includes("law")) {
+    return ["English"];
+  }
+  return [];
+}
+
 async function main() {
   const programs = await prisma.program.findMany({
     include: {
@@ -84,9 +98,11 @@ async function main() {
     await prisma.eligibilityCriterion.create({
       data: {
         programId: program.id,
+        minMatricPercentage: 50,
         minInterPercentage: 50,
         minEntryTestScore,
         acceptedEntryTests: acceptedTests,
+        requiredSubjects: inferRequiredSubjects(program.name),
         isActive: true
       }
     });

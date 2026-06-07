@@ -17,6 +17,25 @@ type EvalOutcome = {
   reasonCodes: string[];
 };
 
+type CriterionLike = {
+  minMatricPercentage: number | null;
+  minInterPercentage: number | null;
+  minEntryTestScore: number | null;
+  acceptedEntryTests: string[];
+  requiredSubjects: string[];
+};
+
+type TestScoreLike = {
+  testType: string;
+  score: number;
+  maxScore: number | null;
+};
+
+type AcademicRecordLike = {
+  subject: string;
+  percentage: number | null;
+};
+
 function normalize(s: string): string {
   return s.trim().toUpperCase();
 }
@@ -30,7 +49,7 @@ function toPercent(score: number, maxScore?: number | null): number {
 
 function bestMatchingTestPercent(
   acceptedTests: string[],
-  studentScores: Array<{ testType: string; score: number; maxScore: number | null }>
+  studentScores: TestScoreLike[]
 ): number | null {
   if (acceptedTests.length === 0) return null;
 
@@ -49,26 +68,48 @@ function bestMatchingTestPercent(
   return best;
 }
 
+function hasRequiredSubjects(
+  requiredSubjects: string[],
+  academicRecords: AcademicRecordLike[]
+): boolean {
+  if (requiredSubjects.length === 0) return true;
+
+  const availableSubjects = new Set(
+    academicRecords.map((record) => normalize(record.subject))
+  );
+
+  return requiredSubjects.every((subject) =>
+    availableSubjects.has(normalize(subject))
+  );
+}
+
 function evaluateAgainstCriterion(
+  matricPercentage: number | null | undefined,
   interPercentage: number | null | undefined,
-  criterion: {
-    minInterPercentage: number | null;
-    minEntryTestScore: number | null;
-    acceptedEntryTests: string[];
-  },
-  studentScores: Array<{ testType: string; score: number; maxScore: number | null }>
+  criterion: CriterionLike,
+  studentScores: TestScoreLike[],
+  academicRecords: AcademicRecordLike[]
 ): { ok: boolean; reasons: string[] } {
   const reasons: string[] = [];
 
-  const minInter = criterion.minInterPercentage ?? 0;
-  const minTest = criterion.minEntryTestScore ?? 0;
-  const accepted = criterion.acceptedEntryTests ?? [];
+  const minMatric = criterion.minMatricPercentage ?? 0;
+  const matric = matricPercentage ?? 0;
+  if (matric < minMatric) {
+    reasons.push("LOW_MATRIC_PERCENTAGE");
+  }
 
+  const minInter = criterion.minInterPercentage ?? 0;
   const inter = interPercentage ?? 0;
   if (inter < minInter) {
     reasons.push("LOW_INTER_PERCENTAGE");
   }
 
+  if (!hasRequiredSubjects(criterion.requiredSubjects ?? [], academicRecords)) {
+    reasons.push("REQUIRED_SUBJECT_NOT_FOUND");
+  }
+
+  const minTest = criterion.minEntryTestScore ?? 0;
+  const accepted = criterion.acceptedEntryTests ?? [];
   const bestTest = bestMatchingTestPercent(accepted, studentScores);
   if (accepted.length > 0 && bestTest === null) {
     reasons.push("REQUIRED_TEST_NOT_FOUND");
@@ -79,16 +120,20 @@ function evaluateAgainstCriterion(
   return { ok: reasons.length === 0, reasons };
 }
 
-/* ── Match Score Calculation ──────────────────────── */
+function scorePercentage(value: number, minimum: number, passBase: number, bonus: number) {
+  if (value >= minimum) {
+    return passBase + Math.min(bonus, Math.round((value - minimum) / 4));
+  }
+  if (minimum <= 0) return passBase + bonus;
+  return Math.max(0, Math.round((value / minimum) * Math.max(1, passBase - 4)));
+}
 
 function computeMatchScore(
+  matricPercentage: number | null | undefined,
   interPercentage: number | null | undefined,
-  criterion: {
-    minInterPercentage: number | null;
-    minEntryTestScore: number | null;
-    acceptedEntryTests: string[];
-  },
-  studentScores: Array<{ testType: string; score: number; maxScore: number | null }>,
+  criterion: CriterionLike,
+  studentScores: TestScoreLike[],
+  academicRecords: AcademicRecordLike[],
   university: {
     province: string;
     scholarshipAvailable: boolean | null;
@@ -99,39 +144,47 @@ function computeMatchScore(
 ): number {
   let score = 0;
 
-  // ── Academic fit: Inter percentage (0–35 points) ──
-  const minInter = criterion.minInterPercentage ?? 50;
-  const inter = interPercentage ?? 0;
-  if (inter >= minInter) {
-    score += 25;
-    score += Math.min(10, Math.round((inter - minInter) / 3));
-  } else if (minInter > 0) {
-    score += Math.max(0, Math.round((inter / minInter) * 20));
-  }
+  score += scorePercentage(
+    matricPercentage ?? 0,
+    criterion.minMatricPercentage ?? 50,
+    10,
+    5
+  );
 
-  // ── Academic fit: Entry test (0–35 points) ──
+  score += scorePercentage(
+    interPercentage ?? 0,
+    criterion.minInterPercentage ?? 50,
+    22,
+    8
+  );
+
   const minTest = criterion.minEntryTestScore ?? 0;
   const accepted = criterion.acceptedEntryTests ?? [];
   const bestTest = bestMatchingTestPercent(accepted, studentScores);
-
   if (accepted.length === 0 || minTest === 0) {
-    score += 35; // no test requirement = full marks
+    score += 30;
   } else if (bestTest !== null) {
-    if (bestTest >= minTest) {
-      score += 25;
-      score += Math.min(10, Math.round((bestTest - minTest) / 3));
-    } else if (minTest > 0) {
-      score += Math.max(0, Math.round((bestTest / minTest) * 20));
-    }
+    score += scorePercentage(bestTest, minTest, 22, 8);
   }
-  // if required test not found → 0 points
 
-  // ── University fit (0–30 points) ──
-  if (studentProvince && university.province === studentProvince) score += 10;
-  if (university.scholarshipAvailable) score += 8;
-  if (university.hostelAvailable) score += 6;
-  if (university.hecRecognized) score += 4;
-  score += 2; // baseline
+  const requiredSubjects = criterion.requiredSubjects ?? [];
+  if (requiredSubjects.length === 0) {
+    score += 10;
+  } else {
+    const availableSubjects = new Set(
+      academicRecords.map((record) => normalize(record.subject))
+    );
+    const matched = requiredSubjects.filter((subject) =>
+      availableSubjects.has(normalize(subject))
+    ).length;
+    score += Math.round((matched / requiredSubjects.length) * 10);
+  }
+
+  if (studentProvince && university.province === studentProvince) score += 5;
+  if (university.scholarshipAvailable) score += 4;
+  if (university.hostelAvailable) score += 3;
+  if (university.hecRecognized) score += 2;
+  score += 1;
 
   return Math.min(100, Math.max(0, score));
 }
@@ -139,7 +192,7 @@ function computeMatchScore(
 export async function evaluateAndPersistEligibility(input: EvaluateInput) {
   const student = await prisma.studentProfile.findUnique({
     where: { id: input.studentId },
-    include: { testScores: true }
+    include: { testScores: true, academicRecords: true },
   });
 
   if (!student) {
@@ -156,15 +209,15 @@ export async function evaluateAndPersistEligibility(input: EvaluateInput) {
         ...(typeof input.maxAnnualFeePKR === "number"
           ? { annualFeePKR: { lte: input.maxAnnualFeePKR } }
           : {}),
-        ...(input.onlyHECRecognized ? { hecRecognized: true } : {})
-      }
+        ...(input.onlyHECRecognized ? { hecRecognized: true } : {}),
+      },
     },
     include: {
       university: true,
       eligibilityCriteria: {
-        where: { isActive: true }
-      }
-    }
+        where: { isActive: true },
+      },
+    },
   });
 
   const outcomes: EvalOutcome[] = [];
@@ -179,13 +232,21 @@ export async function evaluateAndPersistEligibility(input: EvaluateInput) {
         programId: program.id,
         isEligible: false,
         matchScore: computeMatchScore(
+          student.matricPercentage,
           student.interPercentage,
-          { minInterPercentage: null, minEntryTestScore: null, acceptedEntryTests: [] },
+          {
+            minMatricPercentage: null,
+            minInterPercentage: null,
+            minEntryTestScore: null,
+            acceptedEntryTests: [],
+            requiredSubjects: [],
+          },
           student.testScores,
+          student.academicRecords,
           program.university,
           student.province
         ),
-        reasonCodes: ["NO_ACTIVE_CRITERIA"]
+        reasonCodes: ["NO_ACTIVE_CRITERIA"],
       });
       continue;
     }
@@ -195,11 +256,19 @@ export async function evaluateAndPersistEligibility(input: EvaluateInput) {
     let bestScore = 0;
 
     for (const c of criteria) {
-      const result = evaluateAgainstCriterion(student.interPercentage, c, student.testScores);
-      const score = computeMatchScore(
+      const result = evaluateAgainstCriterion(
+        student.matricPercentage,
         student.interPercentage,
         c,
         student.testScores,
+        student.academicRecords
+      );
+      const score = computeMatchScore(
+        student.matricPercentage,
+        student.interPercentage,
+        c,
+        student.testScores,
+        student.academicRecords,
         program.university,
         student.province
       );
@@ -212,12 +281,11 @@ export async function evaluateAndPersistEligibility(input: EvaluateInput) {
         passFound = true;
         bestReasons = [];
         break;
-      } else {
-        if (bestReasons.length > result.reasons.length) {
-          bestReasons = result.reasons;
-        } else if (bestReasons.length === 1 && bestReasons[0] === "NOT_ELIGIBLE") {
-          bestReasons = result.reasons;
-        }
+      } else if (
+        bestReasons.length > result.reasons.length ||
+        (bestReasons.length === 1 && bestReasons[0] === "NOT_ELIGIBLE")
+      ) {
+        bestReasons = result.reasons;
       }
     }
 
@@ -227,12 +295,12 @@ export async function evaluateAndPersistEligibility(input: EvaluateInput) {
       programId: program.id,
       isEligible: passFound,
       matchScore: bestScore,
-      reasonCodes: passFound ? ["ELIGIBLE"] : bestReasons
+      reasonCodes: passFound ? ["ELIGIBLE"] : bestReasons,
     });
   }
 
   await prisma.eligibilityMatchResult.deleteMany({
-    where: { studentId: student.id }
+    where: { studentId: student.id },
   });
 
   if (outcomes.length > 0) {
@@ -243,8 +311,8 @@ export async function evaluateAndPersistEligibility(input: EvaluateInput) {
         programId: o.programId,
         isEligible: o.isEligible,
         matchScore: o.matchScore,
-        reasonCodes: o.reasonCodes
-      }))
+        reasonCodes: o.reasonCodes,
+      })),
     });
   }
 
@@ -254,6 +322,6 @@ export async function evaluateAndPersistEligibility(input: EvaluateInput) {
     studentId: student.id,
     totalEvaluated: outcomes.length,
     eligibleCount,
-    notEligibleCount: outcomes.length - eligibleCount
+    notEligibleCount: outcomes.length - eligibleCount,
   };
 }

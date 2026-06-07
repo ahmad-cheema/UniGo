@@ -6,9 +6,13 @@
     "seed": "tsx prisma/seed.ts"
   },
   "scripts": {
+    "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:deploy:pg": "node scripts/apply-migrations-pg.cjs",
     "db:seed": "prisma db seed",
     "db:seed:criteria": "tsx prisma/seed-criteria.ts",
+    "db:seed:all": "npm run db:seed && npm run db:seed:criteria",
     "db:studio": "prisma studio",
     "dev": "next dev",
     "build": "next build",

@@ -16,6 +16,19 @@ export default async function StudentsPage() {
       studentProfile: {
         include: {
           testScores: { orderBy: { createdAt: "desc" } },
+          academicRecords: { orderBy: [{ level: "asc" }, { subject: "asc" }] },
+          academicDocuments: {
+            select: {
+              id: true,
+              title: true,
+              level: true,
+              fileName: true,
+              mimeType: true,
+              sizeBytes: true,
+              uploadedAt: true,
+            },
+            orderBy: { uploadedAt: "desc" },
+          },
         },
       },
     },

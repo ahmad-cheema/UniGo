@@ -1,5 +1,6 @@
 import { AppLayout } from "@/components/layout/app-layout";
 import { getSession } from "@/lib/auth/session";
+import { isAdminEmail } from "@/lib/auth/admin";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 
@@ -23,5 +24,5 @@ export default async function AppRouteLayout({
     redirect("/sign-in");
   }
 
-  return <AppLayout user={user}>{children}</AppLayout>;
+  return <AppLayout user={user} isAdmin={isAdminEmail(user.email)}>{children}</AppLayout>;
 }

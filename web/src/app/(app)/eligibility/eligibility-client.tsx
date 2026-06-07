@@ -35,7 +35,9 @@ interface Props {
 
 const REASON_LABELS: Record<string, string> = {
   ELIGIBLE: "Eligible",
+  LOW_MATRIC_PERCENTAGE: "Matric % too low",
   LOW_INTER_PERCENTAGE: "Inter % too low",
+  REQUIRED_SUBJECT_NOT_FOUND: "Required subject missing",
   REQUIRED_TEST_NOT_FOUND: "Required test not taken",
   ENTRY_TEST_SCORE_TOO_LOW: "Entry test score too low",
   NO_ACTIVE_CRITERIA: "No criteria defined",

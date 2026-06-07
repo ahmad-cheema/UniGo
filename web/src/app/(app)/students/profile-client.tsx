@@ -15,6 +15,28 @@ type TestScore = {
   examDate: string | null;
 };
 
+type AcademicRecord = {
+  id: number;
+  level: string;
+  subject: string;
+  marksObtained: number | null;
+  totalMarks: number | null;
+  grade: string | null;
+  percentage: number | null;
+  examBoard: string | null;
+  examYear: number | null;
+};
+
+type AcademicDocument = {
+  id: number;
+  title: string;
+  level: string | null;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedAt: string;
+};
+
 type Profile = {
   id: number;
   fullName: string;
@@ -23,6 +45,8 @@ type Profile = {
   interests: string[];
   matricPercentage: number | null;
   interPercentage: number | null;
+  academicRecords: AcademicRecord[];
+  academicDocuments: AcademicDocument[];
   testScores: TestScore[];
 };
 
@@ -52,6 +76,22 @@ export function ProfileClient({ profile, provinces }: Props) {
   const [maxScore, setMaxScore] = useState("");
   const [addingScore, setAddingScore] = useState(false);
   const [scoreMsg, setScoreMsg] = useState("");
+
+  const [recordLevel, setRecordLevel] = useState("Intermediate");
+  const [recordSubject, setRecordSubject] = useState("");
+  const [recordMarks, setRecordMarks] = useState("");
+  const [recordTotal, setRecordTotal] = useState("");
+  const [recordGrade, setRecordGrade] = useState("");
+  const [recordBoard, setRecordBoard] = useState("");
+  const [recordYear, setRecordYear] = useState("");
+  const [recordMsg, setRecordMsg] = useState("");
+  const [savingRecord, setSavingRecord] = useState(false);
+
+  const [docTitle, setDocTitle] = useState("");
+  const [docLevel, setDocLevel] = useState("Intermediate");
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docMsg, setDocMsg] = useState("");
+  const [uploadingDoc, setUploadingDoc] = useState(false);
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -122,10 +162,98 @@ export function ProfileClient({ profile, provinces }: Props) {
     }
   }
 
+  async function handleAddRecord(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingRecord(true);
+    setRecordMsg("");
+
+    try {
+      const res = await fetch("/api/students/me/academic-records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          level: recordLevel,
+          subject: recordSubject,
+          marksObtained: recordMarks ? Number(recordMarks) : null,
+          totalMarks: recordTotal ? Number(recordTotal) : null,
+          grade: recordGrade || null,
+          examBoard: recordBoard || null,
+          examYear: recordYear ? Number(recordYear) : null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setRecordMsg(data.error ?? "Failed to add academic record");
+        return;
+      }
+
+      setRecordMsg("Academic record added!");
+      setRecordSubject("");
+      setRecordMarks("");
+      setRecordTotal("");
+      setRecordGrade("");
+      setRecordBoard("");
+      setRecordYear("");
+      router.refresh();
+    } catch {
+      setRecordMsg("Something went wrong. Please try again.");
+    } finally {
+      setSavingRecord(false);
+    }
+  }
+
+  async function handleDeleteRecord(id: number) {
+    await fetch(`/api/students/me/academic-records/${id}`, { method: "DELETE" });
+    router.refresh();
+  }
+
+  async function handleUploadDocument(e: React.FormEvent) {
+    e.preventDefault();
+    if (!docFile) return;
+
+    setUploadingDoc(true);
+    setDocMsg("");
+
+    try {
+      const form = new FormData();
+      form.set("title", docTitle || docFile.name);
+      form.set("level", docLevel);
+      form.set("file", docFile);
+
+      const res = await fetch("/api/students/me/academic-records", {
+        method: "POST",
+        body: form,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setDocMsg(data.error ?? "Failed to upload document");
+        return;
+      }
+
+      setDocMsg("Document uploaded!");
+      setDocTitle("");
+      setDocFile(null);
+      router.refresh();
+    } catch {
+      setDocMsg("Something went wrong. Please try again.");
+    } finally {
+      setUploadingDoc(false);
+    }
+  }
+
+  async function handleDeleteDocument(id: number) {
+    await fetch(`/api/students/me/documents/${id}`, { method: "DELETE" });
+    router.refresh();
+  }
+
   const completionItems = [
     { label: "Province", done: !!profile.province },
     { label: "Matric %", done: profile.matricPercentage !== null },
     { label: "Inter %", done: profile.interPercentage !== null },
+    { label: "Subject Records", done: profile.academicRecords.length > 0 },
+    { label: "Marksheets", done: profile.academicDocuments.length > 0 },
     { label: "Test Scores", done: profile.testScores.length > 0 },
   ];
   const completionPct = Math.round(
@@ -372,6 +500,224 @@ export function ProfileClient({ profile, provinces }: Props) {
             </form>
           </Card>
         </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <Heading as="h3" className="mb-4">
+            Subject Records
+          </Heading>
+
+          {profile.academicRecords.length === 0 ? (
+            <Text variant="secondary" size="sm">
+              Add subject-level marks so eligibility can check required
+              subjects such as Mathematics, Biology, Chemistry, or English.
+            </Text>
+          ) : (
+            <div className="mb-5 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left">
+                    <th className="pb-2 font-medium text-text-secondary">Level</th>
+                    <th className="pb-2 font-medium text-text-secondary">Subject</th>
+                    <th className="pb-2 font-medium text-text-secondary">Score</th>
+                    <th className="pb-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {profile.academicRecords.map((record) => (
+                    <tr key={record.id} className="border-b border-border last:border-0">
+                      <td className="py-2 pr-3 text-text-secondary">{record.level}</td>
+                      <td className="py-2 pr-3 font-medium text-text">{record.subject}</td>
+                      <td className="py-2 pr-3 text-text-secondary">
+                        {record.percentage !== null
+                          ? `${record.percentage}%`
+                          : record.grade ?? "—"}
+                      </td>
+                      <td className="py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRecord(record.id)}
+                          className="text-xs font-medium text-error hover:underline cursor-pointer"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <form onSubmit={handleAddRecord} className="flex flex-col gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="record-level" className="text-sm font-medium text-text">
+                  Level
+                </label>
+                <select
+                  id="record-level"
+                  value={recordLevel}
+                  onChange={(e) => setRecordLevel(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-white px-4 py-3 text-sm text-text transition-colors duration-150 focus:border-primary focus:outline-none cursor-pointer"
+                >
+                  <option value="Matric">Matric</option>
+                  <option value="Intermediate">Intermediate</option>
+                  <option value="A-Level">A-Level</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <Input
+                id="record-subject"
+                label="Subject"
+                placeholder="e.g. Mathematics"
+                value={recordSubject}
+                onChange={(e) => setRecordSubject(e.target.value)}
+                required
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Input
+                id="record-marks"
+                label="Marks"
+                type="number"
+                min={0}
+                step={0.1}
+                value={recordMarks}
+                onChange={(e) => setRecordMarks(e.target.value)}
+              />
+              <Input
+                id="record-total"
+                label="Total"
+                type="number"
+                min={1}
+                step={0.1}
+                value={recordTotal}
+                onChange={(e) => setRecordTotal(e.target.value)}
+              />
+              <Input
+                id="record-grade"
+                label="Grade"
+                placeholder="A"
+                value={recordGrade}
+                onChange={(e) => setRecordGrade(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                id="record-board"
+                label="Board"
+                placeholder="BISE Lahore"
+                value={recordBoard}
+                onChange={(e) => setRecordBoard(e.target.value)}
+              />
+              <Input
+                id="record-year"
+                label="Exam Year"
+                type="number"
+                min={1950}
+                max={2100}
+                value={recordYear}
+                onChange={(e) => setRecordYear(e.target.value)}
+              />
+            </div>
+
+            {recordMsg && (
+              <p className={`text-sm ${recordMsg.includes("added") ? "text-primary" : "text-error"}`}>
+                {recordMsg}
+              </p>
+            )}
+            <Button type="submit" variant="secondary" disabled={savingRecord}>
+              {savingRecord ? "Adding..." : "Add Academic Record"}
+            </Button>
+          </form>
+        </Card>
+
+        <Card>
+          <Heading as="h3" className="mb-4">
+            Marksheets
+          </Heading>
+
+          {profile.academicDocuments.length === 0 ? (
+            <Text variant="secondary" size="sm">
+              Upload small PDF or image marksheets for the academic record
+              storage requirement.
+            </Text>
+          ) : (
+            <div className="mb-5 flex flex-col gap-2">
+              {profile.academicDocuments.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-text">{doc.title}</p>
+                    <p className="text-xs text-text-secondary">
+                      {doc.level ?? "Document"} · {(doc.sizeBytes / 1024).toFixed(0)} KB
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <a
+                      href={`/api/students/me/documents/${doc.id}/download`}
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      Download
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteDocument(doc.id)}
+                      className="text-xs font-medium text-error hover:underline cursor-pointer"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form onSubmit={handleUploadDocument} className="flex flex-col gap-3">
+            <Input
+              id="doc-title"
+              label="Document Title"
+              placeholder="Intermediate marksheet"
+              value={docTitle}
+              onChange={(e) => setDocTitle(e.target.value)}
+            />
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="doc-level" className="text-sm font-medium text-text">
+                Level
+              </label>
+              <select
+                id="doc-level"
+                value={docLevel}
+                onChange={(e) => setDocLevel(e.target.value)}
+                className="w-full rounded-lg border border-border bg-white px-4 py-3 text-sm text-text transition-colors duration-150 focus:border-primary focus:outline-none cursor-pointer"
+              >
+                <option value="Matric">Matric</option>
+                <option value="Intermediate">Intermediate</option>
+                <option value="A-Level">A-Level</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <input
+              type="file"
+              accept="application/pdf,image/png,image/jpeg,image/webp"
+              onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+              className="block w-full text-sm text-text-secondary file:mr-4 file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2.5 file:text-sm file:font-medium file:text-white hover:file:bg-primary-hover"
+              required
+            />
+            {docMsg && (
+              <p className={`text-sm ${docMsg.includes("uploaded") ? "text-primary" : "text-error"}`}>
+                {docMsg}
+              </p>
+            )}
+            <Button type="submit" disabled={uploadingDoc || !docFile}>
+              {uploadingDoc ? "Uploading..." : "Upload Marksheet"}
+            </Button>
+          </form>
+        </Card>
       </div>
     </div>
   );

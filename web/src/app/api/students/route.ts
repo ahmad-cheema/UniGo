@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { requireAdmin } from "@/lib/auth/admin";
+import { authErrorResponse } from "@/lib/api-errors";
 
 const createStudentSchema = z.object({
   fullName: z.string().min(2),
@@ -13,6 +15,7 @@ const createStudentSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAdmin();
     const body = await req.json();
     const parsed = createStudentSchema.safeParse(body);
 
@@ -29,6 +32,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(student, { status: 201 });
   } catch (error: unknown) {
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+
     if (
       typeof error === "object" &&
       error !== null &&
@@ -48,6 +54,14 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  try {
+    await requireAdmin();
+  } catch (error) {
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    return NextResponse.json({ error: "Failed to load students" }, { status: 500 });
+  }
+
   const url = new URL(req.url);
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 20), 1), 100);
 

@@ -37,8 +37,7 @@ export default async function UniversitiesPage({ searchParams }: Props) {
 
   // Get student profile for shortlist + match data
   let shortlistedIds = new Set<number>();
-  let matchScores = new Map<number, number>();
-  let studentId: number | null = null;
+  const matchScores = new Map<number, number>();
 
   if (session) {
     const user = await prisma.user.findUnique({
@@ -54,7 +53,6 @@ export default async function UniversitiesPage({ searchParams }: Props) {
     });
 
     if (user?.studentProfile) {
-      studentId = user.studentProfile.id;
       shortlistedIds = new Set(
         user.studentProfile.shortlist.map((s) => s.universityId)
       );

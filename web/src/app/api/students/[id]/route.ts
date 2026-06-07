@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { requireStudentOwner } from "@/lib/auth/admin";
+import { authErrorResponse } from "@/lib/api-errors";
 
 export async function GET(
   _req: NextRequest,
@@ -10,6 +12,14 @@ export async function GET(
   const studentId = Number(id);
   if (!Number.isFinite(studentId)) {
     return NextResponse.json({ error: "Invalid student id" }, { status: 400 });
+  }
+
+  try {
+    await requireStudentOwner(studentId);
+  } catch (error) {
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    return NextResponse.json({ error: "Failed to load student" }, { status: 500 });
   }
 
   const student = await prisma.studentProfile.findUnique({
@@ -41,6 +51,14 @@ export async function PUT(
   const studentId = Number(id);
   if (!Number.isFinite(studentId)) {
     return NextResponse.json({ error: "Invalid student id" }, { status: 400 });
+  }
+
+  try {
+    await requireStudentOwner(studentId);
+  } catch (error) {
+    const authError = authErrorResponse(error);
+    if (authError) return authError;
+    return NextResponse.json({ error: "Failed to update student" }, { status: 500 });
   }
 
   const body = await req.json();
